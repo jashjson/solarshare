@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Solar Share — List Surplus</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+    <span class="logo">⚡ Solar Share</span>
+    <div>
+        <a href="index.html">Marketplace</a>
+        <a href="post.html">List Surplus</a>
+        <a href="stats.html">My Stats</a>
+    </div>
+    <div class="rate-control">
+        <label>Govt Rate ₹</label>
+        <input type="number" id="govtRate" min="1" max="20" value="6">
+        <span>/unit</span>
+    </div>
+</nav>
+
+<div class="page">
+    <h2>📤 List Your Surplus Energy</h2>
+    <div class="form-box">
+        <label>Units Available</label>
+        <input type="number" id="units" placeholder="e.g. 20" min="1">
+
+        <label>Your Location</label>
+        <input type="text" id="location" placeholder="Locality/ City">
+
+        <button class="btn btn-dark" onclick="getPreview()">
+            Price
+        </button>
+
+        <div id="spinner" class="spinner hidden">Getting AI price...</div>
+
+        <div id="preview" class="preview-box hidden">
+            <div class="preview-row">
+                <span>Price</span>
+                <span class="text-green" id="aiPrice"></span>
+            </div>
+            <div class="preview-row">
+                <span>Government Rate</span>
+                <span class="text-red" id="govtDisplay"></span>
+            </div>
+            <div class="preview-row">
+                <span>Season</span>
+                <span id="season"></span>
+            </div>
+
+            <div style="border-top:1px solid #e2e8f0;padding-top:10px;margin-top:4px">
+                <div style="font-weight:600;margin-bottom:8px;font-size:0.9rem">
+                    📊 Conditions Used
+                </div>
+                <div class="preview-row">
+                    <span>🌡 Temperature</span>
+                    <span id="c_temp"></span>
+                </div>
+                <div class="preview-row">
+                    <span>🌤 Weather</span>
+                    <span id="c_weather"></span>
+                </div>
+                <div class="preview-row">
+                    <span>💧 Humidity</span>
+                    <span id="c_humidity"></span>
+                </div>
+                <div class="preview-row">
+                    <span>⚡ Grid Load</span>
+                    <span id="c_gridload"></span>
+                </div>
+                <div class="preview-row">
+                    <span>💨 Wind Speed</span>
+                    <span id="c_wind"></span>
+                </div>
+            </div>
+
+            <div class="text-grey" id="reason"></div>
+            <button class="btn btn-yellow" onclick="postListing()">
+                ✅ Post Listing
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let previewData = null;
+
+    const govtInput = document.getElementById("govtRate");
+    let govtRate = Number(localStorage.getItem("govtRate") || 6);
+    govtInput.value = govtRate;
+
+    govtInput.addEventListener("change", () => {
+        govtRate = Number(govtInput.value);
+        localStorage.setItem("govtRate", govtRate);
+    });
+
+    async function getPreview() {
+        const units    = Number(document.getElementById("units").value);
+        const location = document.getElementById("location").value.trim();
+
+        if (!units || !location) return alert("Please fill in all fields");
+
+        const listings = JSON.parse(localStorage.getItem("listings") || "[]");
+
+        document.getElementById("spinner").classList.remove("hidden");
+        document.getElementById("preview").classList.add("hidden");
+
+        try {
+            const res = await fetch("http://localhost:5000/api/get-price", {
+                method  : "POST",
+                headers : { "Content-Type": "application/json" },
+                body    : JSON.stringify({
+                    units_available : units,
+                    units_requested : units,
+                    govt_rate       : govtRate,
+                    total_listings  : listings.length
+                })
+            });
+
+            previewData = await res.json();
+
+            document.getElementById("aiPrice").textContent     = `₹${previewData.price}/unit`;
+            document.getElementById("govtDisplay").textContent = `₹${govtRate}/unit`;
+            document.getElementById("season").textContent      = previewData.season;
+            document.getElementById("reason").textContent      = `💡 ${previewData.reason}`;
+            document.getElementById("c_temp").textContent      = `${previewData.conditions.temperature}°C`;
+            document.getElementById("c_weather").textContent   = previewData.conditions.weather;
+            document.getElementById("c_humidity").textContent  = `${previewData.conditions.humidity}%`;
+            document.getElementById("c_gridload").textContent  = previewData.conditions.grid_load;
+            document.getElementById("c_wind").textContent      = `${previewData.conditions.wind_speed} km/h`;
+
+            document.getElementById("spinner").classList.add("hidden");
+            document.getElementById("preview").classList.remove("hidden");
+
+        } catch (err) {
+            alert("Failed to get price. Is the server running?");
+            document.getElementById("spinner").classList.add("hidden");
+        }
+    }
+
+    function postListing() {
+        if (!previewData) return;
+
+        const units    = Number(document.getElementById("units").value);
+        const location = document.getElementById("location").value.trim();
+        const listings = JSON.parse(localStorage.getItem("listings") || "[]");
+
+        listings.push({
+            id       : Date.now(),
+            units,
+            location,
+            postedAt : new Date().toLocaleString()
+        });
+
+        localStorage.setItem("listings", JSON.stringify(listings));
+        window.location.href = "index.html";
+    }
+</script>
+</body>
+</html>

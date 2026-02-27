@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Solar Share — Marketplace</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+    <span class="logo">⚡ Solar Share</span>
+    <div>
+        <a href="index.html">Marketplace</a>
+        <a href="post.html">List Surplus</a>
+        <a href="stats.html">My Stats</a>
+    </div>
+    <div class="rate-control">
+        <label>Govt Rate ₹</label>
+        <input type="number" id="govtRate" min="1" max="20" value="6">
+        <span>/unit</span>
+    </div>
+</nav>
+
+<div class="page">
+    <div class="header-row">
+        <h2>⚡ Available Surplus Energy</h2>
+        <span class="tag" id="govtTag">Govt Rate: ₹6/unit</span>
+    </div>
+    <div id="listings" class="grid"></div>
+    <div id="emptyMsg" class="empty hidden">
+        No listings yet.
+        <a href="post.html" style="color:#f59e0b;font-weight:bold;">
+            Be the first to list your surplus!
+        </a>
+    </div>
+</div>
+
+<script>
+    const govtInput = document.getElementById("govtRate");
+    const govtTag   = document.getElementById("govtTag");
+
+    // sync govt rate
+    let govtRate = Number(localStorage.getItem("govtRate") || 6);
+    govtInput.value = govtRate;
+    govtTag.textContent = `Govt Rate: ₹${govtRate}/unit`;
+
+    govtInput.addEventListener("change", () => {
+        govtRate = Number(govtInput.value);
+        localStorage.setItem("govtRate", govtRate);
+        govtTag.textContent = `Govt Rate: ₹${govtRate}/unit`;
+        renderListings();
+    });
+
+    function renderListings() {
+        const listings = JSON.parse(localStorage.getItem("listings") || "[]");
+        const container = document.getElementById("listings");
+        const emptyMsg  = document.getElementById("emptyMsg");
+
+        container.innerHTML = "";
+
+        const active = listings.filter(l => l.units > 0);
+        if (active.length === 0) {
+            emptyMsg.classList.remove("hidden");
+            return;
+        }
+        emptyMsg.classList.add("hidden");
+
+        active.forEach(l => {
+            const card = document.createElement("div");
+            card.className = "card";
+            card.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span class="units">${l.units} units</span>
+                    <span class="location">📍 ${l.location}</span>
+                </div>
+                <div class="discount">Below govt rate of ₹${govtRate}/unit</div>
+                <div class="text-grey">Posted: ${l.postedAt}</div>
+                <button
+                    class="btn btn-yellow"
+                    onclick="window.location.href='request.html?id=${l.id}'"
+                >
+                    Request Units
+                </button>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    renderListings();
+</script>
+</body>
+</html>

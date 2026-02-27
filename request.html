@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Solar Share — Request Units</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+    <span class="logo">⚡ Solar Share</span>
+    <div>
+        <a href="index.html">Marketplace</a>
+        <a href="post.html">List Surplus</a>
+        <a href="stats.html">My Stats</a>
+    </div>
+    <div class="rate-control">
+        <label>Govt Rate ₹</label>
+        <input type="number" id="govtRate" min="1" max="20" value="6">
+        <span>/unit</span>
+    </div>
+</nav>
+
+<div class="page">
+    <h2>⚡ Request Units</h2>
+    <div class="form-box">
+        <div id="listingInfo"></div>
+
+        <label>Units You Need</label>
+        <input type="number" id="requested" placeholder="Enter units" min="1">
+
+        <button class="btn btn-dark" onclick="calcBill()">
+            📊 Calculate Bill
+        </button>
+
+        <div id="spinner" class="spinner hidden">Calculating...</div>
+
+        <div id="breakdown" class="breakdown hidden">
+            <h3 style="margin-bottom:4px">💰 Bill Breakdown</h3>
+
+            <div class="breakdown-row">
+                <span>Units from peer</span>
+                <span id="peerUnitsLabel"></span>
+                <span class="text-green" id="peerCost"></span>
+            </div>
+            <div class="breakdown-row">
+                <span>Same units from govt</span>
+                <span id="govtUnitsLabel"></span>
+                <span class="text-red" id="govtCost"></span>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="savings-box">
+                <span>🎉 You Save</span>
+                <div>
+                    <span class="saved-amt" id="savedAmt"></span>
+                    <span class="saved-pct" id="savedPct"></span>
+                </div>
+            </div>
+
+            <div class="text-grey" id="reason"></div>
+            <div class="text-grey" id="seasonLabel"></div>
+
+            <div style="border-top:1px solid #e2e8f0;padding-top:10px;margin-top:4px">
+                <div style="font-weight:600;margin-bottom:8px;font-size:0.9rem">
+                    📊 Conditions Used
+                </div>
+                <div class="breakdown-row">
+                    <span>🌡 Temperature</span>
+                    <span id="c_temp"></span>
+                </div>
+                <div class="breakdown-row">
+                    <span>🌤 Weather</span>
+                    <span id="c_weather"></span>
+                </div>
+                <div class="breakdown-row">
+                    <span>💧 Humidity</span>
+                    <span id="c_humidity"></span>
+                </div>
+                <div class="breakdown-row">
+                    <span>⚡ Grid Load</span>
+                    <span id="c_gridload"></span>
+                </div>
+                <div class="breakdown-row">
+                    <span>💨 Wind Speed</span>
+                    <span id="c_wind"></span>
+                </div>
+            </div>
+
+            <button class="btn btn-green" onclick="confirmPurchase()">
+                ✅ Confirm Purchase
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const params   = new URLSearchParams(window.location.search);
+    const id       = Number(params.get("id"));
+    const listings = JSON.parse(localStorage.getItem("listings") || "[]");
+    const listing  = listings.find(l => l.id === id);
+
+    let govtRate = Number(localStorage.getItem("govtRate") || 6);
+    let calcData = null;
+
+    const govtInput = document.getElementById("govtRate");
+    govtInput.value = govtRate;
+    govtInput.addEventListener("change", () => {
+        govtRate = Number(govtInput.value);
+        localStorage.setItem("govtRate", govtRate);
+    });
+
+    if (!listing) {
+        document.querySelector(".page").innerHTML = "<p>Listing not found.</p>";
+    } else {
+        document.getElementById("listingInfo").innerHTML = `
+            <div class="preview-row">
+                <span>📍 Location</span>
+                <span>${listing.location}</span>
+            </div>
+            <div class="preview-row">
+                <span>Available Units</span>
+                <span style="font-weight:bold">${listing.units} units</span>
+            </div>
+            <div class="preview-row">
+                <span>Govt Rate</span>
+                <span class="text-red">₹${govtRate}/unit</span>
+            </div>
+        `;
+    }
+
+    async function calcBill() {
+        const requested = Number(document.getElementById("requested").value);
+        if (!requested || requested <= 0) return alert("Enter valid units");
+        if (requested > listing.units)    return alert(`Max available: ${listing.units} units`);
+
+        document.getElementById("spinner").classList.remove("hidden");
+        document.getElementById("breakdown").classList.add("hidden");
+
+        try {
+            const res = await fetch("http://localhost:5000/api/get-price", {
+                method  : "POST",
+                headers : { "Content-Type": "application/json" },
+                body    : JSON.stringify({
+                    units_available : listing.units,
+                    units_requested : requested,
+                    govt_rate       : govtRate,
+                    total_listings  : listings.length
+                })
+            });
+
+            const data     = await res.json();
+            const peerCost = +(requested * data.price).toFixed(2);
+            const govtCost = +(requested * govtRate).toFixed(2);
+            const saved    = +(govtCost - peerCost).toFixed(2);
+            const savedPct = +((saved / govtCost) * 100).toFixed(1);
+
+            calcData = {
+                requested,
+                peerPrice  : data.price,
+                peerCost,
+                govtCost,
+                saved,
+                savedPct,
+                reason     : data.reason,
+                season     : data.season,
+                conditions : data.conditions
+            };
+
+            document.getElementById("peerUnitsLabel").textContent = `${requested} units @ ₹${data.price}/unit`;
+            document.getElementById("peerCost").textContent       = `₹${peerCost}`;
+            document.getElementById("govtUnitsLabel").textContent = `${requested} units @ ₹${govtRate}/unit`;
+            document.getElementById("govtCost").textContent       = `₹${govtCost}`;
+            document.getElementById("savedAmt").textContent       = `₹${saved}`;
+            document.getElementById("savedPct").textContent       = `(${savedPct}% off)`;
+            document.getElementById("reason").textContent         = `💡 ${data.reason}`;
+            document.getElementById("seasonLabel").textContent    = `📅 Season: ${data.season}`;
+            document.getElementById("c_temp").textContent         = `${data.conditions.temperature}°C`;
+            document.getElementById("c_weather").textContent      = data.conditions.weather;
+            document.getElementById("c_humidity").textContent     = `${data.conditions.humidity}%`;
+            document.getElementById("c_gridload").textContent     = data.conditions.grid_load;
+            document.getElementById("c_wind").textContent         = `${data.conditions.wind_speed} km/h`;
+
+            document.getElementById("spinner").classList.add("hidden");
+            document.getElementById("breakdown").classList.remove("hidden");
+
+        } catch {
+            alert("Failed. Is the server running?");
+            document.getElementById("spinner").classList.add("hidden");
+        }
+    }
+
+    function confirmPurchase() {
+        if (!calcData) return;
+
+        const transactions = JSON.parse(localStorage.getItem("transactions") || "[]");
+        transactions.push({
+            id         : Date.now(),
+            date       : new Date().toLocaleString(),
+            location   : listing.location,
+            units      : calcData.requested,
+            peerPrice  : calcData.peerPrice,
+            govtRate,
+            peerCost   : calcData.peerCost,
+            govtCost   : calcData.govtCost,
+            saved      : calcData.saved,
+            savedPct   : calcData.savedPct,
+            season     : calcData.season,
+            reason     : calcData.reason,
+            conditions : calcData.conditions
+        });
+        localStorage.setItem("transactions", JSON.stringify(transactions));
+
+        const updated = listings.map(l =>
+            l.id === id ? { ...l, units: l.units - calcData.requested } : l
+        ).filter(l => l.units > 0);
+        localStorage.setItem("listings", JSON.stringify(updated));
+
+        window.location.href = "stats.html";
+    }
+</script>
+</body>
+</html>
